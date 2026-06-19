@@ -1,0 +1,3 @@
+fastmcp>=3.0
+ftrack-python-api>=3.0
+requests>=2.28
