@@ -1,5 +1,7 @@
 # ftrack MCP server
 
+![Connect any AI agent to ftrack](assets/hero.png)
+
 A **Model Context Protocol** server that gives LLM agents (Claude Desktop, Claude Code, Cursor, …) broad,
 typed access to the **ftrack Studio** production-tracking API.
 
