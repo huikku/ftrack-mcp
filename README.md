@@ -96,3 +96,7 @@ shot↔asset casting** (so casting can't round-trip through ftrack) and its VFX 
 - A TS port over the official `ftrack-javascript` SDK is straightforward if you want it in-stack.
 
 MIT © 2026 John Huikku
+
+---
+
+Built by **John Huikku** · [alienrobot.com](https://alienrobot.com)
