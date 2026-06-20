@@ -73,6 +73,11 @@ a project from one tracker to another** — read the structure from the source M
 target's `create`/`create_*` tools, no bespoke script. This trio grew out of copying one project across all
 three platforms.
 
+📊 **See [`COMPARISON.md`](COMPARISON.md)** for a side-by-side of the three trackers (data model, status
+vocabularies) and the **migration incompatibilities** to know about — notably that **ftrack has no
+shot↔asset casting** (so casting can't round-trip through ftrack) and its VFX schema lacks a clean
+"done"/"approved" task status (lossy status mapping).
+
 ## Notes
 - Reads return entities serialized to the **fields you request** (dot-paths like `status.name`), to avoid
   lazy-loading huge relations. Writes auto-resolve `{"id": "..."}` references (parent → `Context`,
