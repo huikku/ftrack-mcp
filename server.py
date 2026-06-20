@@ -13,7 +13,7 @@ Config (env or MCP client config):
 
 Run:  python3 server.py        (stdio transport, for Claude Desktop / Cursor / Claude Code)
 """
-import os, tempfile, datetime
+import os, tempfile, datetime, json
 import requests
 import ftrack_api
 from fastmcp import FastMCP
@@ -92,6 +92,45 @@ def ser_list(entities, fields=None, limit=200):
     return [ser(e, fields) for e in list(entities)[:limit]]
 
 
+# ---- dry-run modes: plan (client-side echo) · preflight (real reads + schema staging, no write) --
+def _mode(dry_run):
+    if isinstance(dry_run, str):
+        d = dry_run.lower()
+        return "preflight" if d == "preflight" else ("live" if d in ("", "false", "no") else "plan")
+    return "plan" if dry_run else "live"
+
+
+def _planlog(entry):
+    entry = {"ts": datetime.datetime.now().isoformat(timespec="seconds"), **entry}
+    path = os.environ.get("MCP_PLAN_LOG")
+    if path:
+        try:
+            with open(path, "a") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except Exception:
+            pass
+    return entry
+
+
+def _ft_check_refs(data):
+    """Preflight: read every {id} / {__entity_type__,id} link in `data` and report found/name."""
+    reads, conflicts = {}, []
+    for k, v in (data or {}).items():
+        if isinstance(v, dict) and "id" in v:
+            et = v.get("__entity_type__") or _ref_type(k)
+            if not et:
+                continue
+            try:
+                r = session().query('%s where id is "%s"' % (et, v["id"])).first()
+                reads[k] = {"found": bool(r), "name": _path(r, "name") if r else None}
+                if not r:
+                    conflicts.append("%s %s %s not found" % (k, et, v["id"]))
+            except Exception as e:
+                reads[k] = {"found": False, "error": repr(e)[:80]}
+                conflicts.append("%s could not be resolved" % k)
+    return reads, conflicts
+
+
 # =====================================================================================
 #  GENERIC POWER TOOLS  (full API reach)
 # =====================================================================================
@@ -112,24 +151,62 @@ def query_one(expression: str, fields: list[str] | None = None) -> dict | None:
     return ser(r, fields) if r else None
 
 
-def create(entity_type: str, data: dict, dry_run: bool = False) -> dict:
+def create(entity_type: str, data: dict, dry_run=False) -> dict:
     """Create any entity. `data` maps attributes to values; entity references may be passed as
     {"id": "..."} or {"__entity_type__": "Type", "id": "..."} and are resolved automatically.
     e.g. create("Sequence", {"name":"sq010","parent":{"id":"<project_id>"}}).
-    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
-    if dry_run:
-        return {"dry_run": True, "would": "create", "entity_type": entity_type, "data": data}
+    `dry_run`: false = write · "plan"/true = echo the intent (no server contact) · "preflight" = resolve
+    every reference against live data AND stage the create in the session to run ftrack's own schema/required
+    validation, then roll back (writes nothing). Set MCP_PLAN_LOG to capture a JSONL plan file."""
+    mode = _mode(dry_run)
+    if mode == "plan":
+        return _planlog({"dry_run": "plan", "would": "create", "entity_type": entity_type, "input": data})
+    if mode == "preflight":
+        reads, conflicts = _ft_check_refs(data)
+        staged = {}
+        try:  # bonus: ftrack validates schema/type/required at create-time; stage then roll back
+            session().create(entity_type, _resolve_refs(data))
+            staged = {"schema_valid": True}
+        except Exception as ex:
+            staged = {"schema_valid": False, "error": str(ex)[:120]}
+            conflicts.append("schema: " + str(ex)[:100])
+        finally:
+            try:
+                session().rollback()
+            except Exception:
+                pass
+        return _planlog({"dry_run": "preflight", "would": "create", "entity_type": entity_type, "input": data,
+                         "reads": reads, "staged": staged, "conflicts": conflicts,
+                         "verdict": "would_fail" if conflicts else "ok"})
     e = session().create(entity_type, _resolve_refs(data))
     session().commit()
     return ser(e, list(data.keys()) + ["id"])
 
 
-def update(entity_type: str, entity_id: str, data: dict, dry_run: bool = False) -> dict:
+def update(entity_type: str, entity_id: str, data: dict, dry_run=False) -> dict:
     """Update an entity by id. `data` = attributes to set (refs as {"id": ...}).
-    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
-    if dry_run:
-        return {"dry_run": True, "would": "update", "entity_type": entity_type,
-                "entity_id": entity_id, "data": data}
+    `dry_run`: false = write · "plan"/true = echo · "preflight" = read the current entity and return a real
+    before→after diff + resolve references (no write). Logged to MCP_PLAN_LOG."""
+    mode = _mode(dry_run)
+    if mode == "plan":
+        return _planlog({"dry_run": "plan", "would": "update", "entity_type": entity_type,
+                         "entity_id": entity_id, "input": data})
+    if mode == "preflight":
+        e = session().query('%s where id is "%s"' % (entity_type, entity_id)).first()
+        reads, conflicts = _ft_check_refs(data)
+        if not e:
+            conflicts.append("%s %s not found" % (entity_type, entity_id))
+
+        def _cur(k):
+            try:
+                return _scalar(e[k]) if e else None
+            except Exception:
+                return None
+        change = {k: {"from": _cur(k), "to": (v.get("id") if isinstance(v, dict) else v)}
+                  for k, v in (data or {}).items()}
+        return _planlog({"dry_run": "preflight", "would": "update", "entity_type": entity_type,
+                         "entity_id": entity_id, "exists": bool(e), "change": change, "reads": reads,
+                         "conflicts": conflicts, "verdict": "would_fail" if conflicts else "ok"})
     e = session().get(entity_type, entity_id)
     for k, v in _resolve_refs(data).items():
         e[k] = v
@@ -137,11 +214,19 @@ def update(entity_type: str, entity_id: str, data: dict, dry_run: bool = False) 
     return ser(e, list(data.keys()) + ["id"])
 
 
-def delete(entity_type: str, entity_id: str, dry_run: bool = False) -> dict:
+def delete(entity_type: str, entity_id: str, dry_run=False) -> dict:
     """Delete an entity by id.
-    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
-    if dry_run:
-        return {"dry_run": True, "would": "delete", "entity_type": entity_type, "entity_id": entity_id}
+    `dry_run`: false = delete · "plan"/true = echo · "preflight" = confirm the target exists (live read) and
+    show what would be deleted (no write). Logged to MCP_PLAN_LOG."""
+    mode = _mode(dry_run)
+    if mode == "plan":
+        return _planlog({"dry_run": "plan", "would": "delete", "entity_type": entity_type, "entity_id": entity_id})
+    if mode == "preflight":
+        e = session().query('%s where id is "%s"' % (entity_type, entity_id)).first()
+        conflicts = [] if e else ["%s %s not found" % (entity_type, entity_id)]
+        return _planlog({"dry_run": "preflight", "would": "delete", "entity_type": entity_type,
+                         "entity_id": entity_id, "exists": bool(e), "name": _path(e, "name") if e else None,
+                         "conflicts": conflicts, "verdict": "would_fail" if conflicts else "ok"})
     session().delete(session().get(entity_type, entity_id))
     session().commit()
     return {"ok": True, "deleted": {"__entity_type__": entity_type, "id": entity_id}}
@@ -295,11 +380,27 @@ def create_task(parent_id: str, task_type: str, name: str = None, status: str = 
 # =====================================================================================
 #  status / assignment / notes / lists / time / media / users
 # =====================================================================================
-def set_status(entity_type: str, entity_id: str, status: str, dry_run: bool = False) -> dict:
-    """Set an entity's status by status name. `dry_run=true` previews without committing."""
-    if dry_run:
-        return {"dry_run": True, "would": "set status", "entity_type": entity_type,
-                "entity_id": entity_id, "status": status}
+def set_status(entity_type: str, entity_id: str, status: str, dry_run=False) -> dict:
+    """Set an entity's status by status name. `dry_run`: false = write · "plan"/true = echo ·
+    "preflight" = read the entity + validate the status name against the live schema and show the
+    current→new status (no write). Logged to MCP_PLAN_LOG."""
+    mode = _mode(dry_run)
+    if mode == "plan":
+        return _planlog({"dry_run": "plan", "would": "set status", "entity_type": entity_type,
+                         "entity_id": entity_id, "status": status})
+    if mode == "preflight":
+        e = session().query('%s where id is "%s"' % (entity_type, entity_id)).first()
+        st = session().query('Status where name is "%s"' % status).first()
+        cur = _path(e, "status.name") if e else None
+        conflicts = []
+        if not e:
+            conflicts.append("%s %s not found" % (entity_type, entity_id))
+        if not st:
+            conflicts.append("status %r not found" % status)
+        return _planlog({"dry_run": "preflight", "would": "set status", "entity_type": entity_type,
+                         "entity_id": entity_id, "exists": bool(e),
+                         "change": {"status": "%s → %s" % (cur, status)},
+                         "conflicts": conflicts, "verdict": "would_fail" if conflicts else "ok"})
     e = session().get(entity_type, entity_id)
     e["status"] = session().query('Status where name is "%s"' % status).one()
     session().commit()

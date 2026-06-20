@@ -47,9 +47,13 @@ env to the app's `mcpServers` config.
 
 ## Tools
 **Generic (full reach):** `query` · `query_one` · `create` · `update` · `delete`
-> `create` / `update` / `delete` each take **`dry_run: bool = false`** — set it `true` to preview the write
-> and commit nothing (matches the safety gate in [`shotgrid-mcp`](https://github.com/huikku/shotgrid-mcp)
-> and [`kitsu-mcp`](https://github.com/huikku/kitsu-mcp)).
+> Every write takes `dry_run` (default `false`). `create` / `update` / `delete` / `set_status` support **two
+> preview levels**: `dry_run="plan"` (client-side echo, no server contact) and **`dry_run="preflight"`** — a
+> *real* dry run that resolves every reference against live data, validates statuses against the schema,
+> returns a before→after diff, and (on `create`) **stages the op in ftrack's session to run its own schema
+> validation, then rolls back** — writing nothing. Set `MCP_PLAN_LOG=/path.jsonl` to capture a reviewable
+> plan file. Preflight is high-confidence, not a guarantee (ftrack validates some rules only at commit).
+> Other write tools take `dry_run` as a plain boolean.
 **Schema / discovery:** `list_entity_types` · `get_entity_schema` · `list_project_schemas` · `list_statuses` ·
 `list_task_types` · `list_object_types` · `list_priorities` · `list_custom_attributes`
 **Projects / structure:** `list_projects` · `get_project` · `create_project` · `list_children` · `list_tasks` ·
