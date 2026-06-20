@@ -112,31 +112,38 @@ def query_one(expression: str, fields: list[str] | None = None) -> dict | None:
     return ser(r, fields) if r else None
 
 
-def create(entity_type: str, data: dict, commit: bool = True) -> dict:
+def create(entity_type: str, data: dict, dry_run: bool = False) -> dict:
     """Create any entity. `data` maps attributes to values; entity references may be passed as
     {"id": "..."} or {"__entity_type__": "Type", "id": "..."} and are resolved automatically.
-    e.g. create("Sequence", {"name":"sq010","parent":{"id":"<project_id>"}})."""
+    e.g. create("Sequence", {"name":"sq010","parent":{"id":"<project_id>"}}).
+    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
+    if dry_run:
+        return {"dry_run": True, "would": "create", "entity_type": entity_type, "data": data}
     e = session().create(entity_type, _resolve_refs(data))
-    if commit:
-        session().commit()
+    session().commit()
     return ser(e, list(data.keys()) + ["id"])
 
 
-def update(entity_type: str, entity_id: str, data: dict, commit: bool = True) -> dict:
-    """Update an entity by id. `data` = attributes to set (refs as {"id": ...})."""
+def update(entity_type: str, entity_id: str, data: dict, dry_run: bool = False) -> dict:
+    """Update an entity by id. `data` = attributes to set (refs as {"id": ...}).
+    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
+    if dry_run:
+        return {"dry_run": True, "would": "update", "entity_type": entity_type,
+                "entity_id": entity_id, "data": data}
     e = session().get(entity_type, entity_id)
     for k, v in _resolve_refs(data).items():
         e[k] = v
-    if commit:
-        session().commit()
+    session().commit()
     return ser(e, list(data.keys()) + ["id"])
 
 
-def delete(entity_type: str, entity_id: str, commit: bool = True) -> dict:
-    """Delete an entity by id."""
+def delete(entity_type: str, entity_id: str, dry_run: bool = False) -> dict:
+    """Delete an entity by id.
+    Set `dry_run=true` to preview the write without committing (nothing is staged in the session)."""
+    if dry_run:
+        return {"dry_run": True, "would": "delete", "entity_type": entity_type, "entity_id": entity_id}
     session().delete(session().get(entity_type, entity_id))
-    if commit:
-        session().commit()
+    session().commit()
     return {"ok": True, "deleted": {"__entity_type__": entity_type, "id": entity_id}}
 
 

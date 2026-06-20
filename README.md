@@ -47,6 +47,9 @@ env to the app's `mcpServers` config.
 
 ## Tools
 **Generic (full reach):** `query` · `query_one` · `create` · `update` · `delete`
+> `create` / `update` / `delete` each take **`dry_run: bool = false`** — set it `true` to preview the write
+> and commit nothing (matches the safety gate in [`shotgrid-mcp`](https://github.com/huikku/shotgrid-mcp)
+> and [`kitsu-mcp`](https://github.com/huikku/kitsu-mcp)).
 **Schema / discovery:** `list_entity_types` · `get_entity_schema` · `list_project_schemas` · `list_statuses` ·
 `list_task_types` · `list_object_types` · `list_priorities` · `list_custom_attributes`
 **Projects / structure:** `list_projects` · `get_project` · `create_project` · `list_children` · `list_tasks` ·
@@ -75,6 +78,8 @@ three platforms.
   lazy-loading huge relations. Writes auto-resolve `{"id": "..."}` references (parent → `Context`,
   project → `Project`, status → `Status`, type → `Type`, …).
 - Validated live: all 28 tools register; query/schema/create/update/delete/notes/status round-trips pass.
+- Writes are gated by **`dry_run`** (preview, nothing staged). This replaced an earlier `commit` flag, where
+  `commit=false` was a footgun — ftrack would stage the change and a later commit would flush it.
 - A TS port over the official `ftrack-javascript` SDK is straightforward if you want it in-stack.
 
 MIT © 2026 John Huikku
