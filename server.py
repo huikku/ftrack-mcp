@@ -350,6 +350,35 @@ def set_thumbnail(entity_type: str, entity_id: str, image_url_or_path: str) -> d
     return {"ok": True, "entity_id": entity_id}
 
 
+def create_version(parent_id: str, name: str = None, task_id: str = None, asset_type: str = None) -> dict:
+    """Create an AssetVersion under a context (shot/asset) — ftrack's review unit. ftrack AssetVersions live
+    under an Asset, so the parent Asset is created if missing. `asset_type` is an AssetType name (default:
+    first available); link a task with `task_id`. Pair with `upload_review_media` to attach a movie."""
+    s = session()
+    parent = s.query('Context where id is "%s"' % parent_id).first()
+    at = (s.query('AssetType where name is "%s"' % asset_type).first() if asset_type
+          else s.query("AssetType").first())
+    aname = name or (parent["name"] if parent else "asset")
+    asset = s.query('Asset where parent.id is "%s" and name is "%s"' % (parent_id, aname)).first()
+    if not asset:
+        asset = s.create("Asset", {"name": aname, "parent": parent, "type": at})
+    data = {"asset": asset}
+    if task_id:
+        data["task"] = s.get("Task", task_id)
+    ver = s.create("AssetVersion", data)
+    s.commit()
+    return ser(ver, ["version", "id"])
+
+
+def upload_review_media(version_id: str, path: str) -> dict:
+    """Upload a movie/image to an AssetVersion as **web-reviewable** media — ftrack encodes it
+    (produces the ftrackreview component). Use this to carry version media INTO ftrack during a migration."""
+    ver = session().get("AssetVersion", version_id)
+    ver.encode_media(path)
+    session().commit()
+    return {"ok": True, "version_id": version_id, "encoded": path}
+
+
 def whoami() -> dict:
     """The authenticated API user + server info."""
     s = session()
@@ -370,7 +399,7 @@ for _fn in (query, query_one, create, update, delete,
             list_task_types, list_object_types, list_priorities, list_custom_attributes,
             list_projects, get_project, create_project, list_children, list_tasks, create_task,
             set_status, assign_task, add_note, get_notes, list_lists, log_time, set_thumbnail,
-            whoami, list_users):
+            create_version, upload_review_media, whoami, list_users):
     mcp.tool(_fn)
 
 
