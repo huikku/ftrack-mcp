@@ -60,6 +60,16 @@ env to the app's `mcpServers` config.
 - *"what fields does a Shot have?"* → `get_entity_schema("Shot")`
 - *"make a task"* → `create_task("<shot_id>", "Compositing", status="Ready to start")`
 
+## Part of a tracker-MCP trio — migrate projects between platforms
+This is one of **three sibling tracker MCPs**, each with the same shape (generic CRUD + schema + typed
+convenience): [`shotgrid-mcp`](https://github.com/huikku/shotgrid-mcp),
+[`ftrack-mcp`](https://github.com/huikku/ftrack-mcp) (this repo), and
+[`kitsu-mcp`](https://github.com/huikku/kitsu-mcp). They all speak the same production model
+(Project → Sequence/Asset → Shot → Task → Version/Status), so **an agent with two of them loaded can migrate
+a project from one tracker to another** — read the structure from the source MCP, recreate it via the
+target's `create`/`create_*` tools, no bespoke script. This trio grew out of copying one project across all
+three platforms.
+
 ## Notes
 - Reads return entities serialized to the **fields you request** (dot-paths like `status.name`), to avoid
   lazy-loading huge relations. Writes auto-resolve `{"id": "..."}` references (parent → `Context`,
