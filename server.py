@@ -525,13 +525,45 @@ def list_users(limit: int = 200) -> list[dict]:
     return ser_list(session().query("User"), ["username", "first_name", "last_name", "is_active"], limit)
 
 
+# canonical status buckets — the shared vocabulary for cross-tracker diff/verify
+_CANON = {"not started": "todo", "ready to start": "todo", "on hold": "wip", "in progress": "wip",
+          "wip": "wip", "pending review": "review", "awaiting client": "review", "revise": "review",
+          "needs attention": "wip", "client approved": "approved", "approved": "approved",
+          "omitted": "todo", "production": "wip", "post-production": "wip"}
+
+
+def project_summary(project_id: str) -> dict:
+    """A **normalized snapshot** of a project for cross-tracker verify/diff: entity counts plus, per shot,
+    its thumbnail flag and per-task **canonical** status (todo/wip/done/review/approved). Every tracker MCP
+    emits the same shape, so two summaries can be diffed directly. (ftrack has no shot↔asset casting model,
+    so `cast` is always empty here.) Read-only."""
+    s = session()
+    proj = s.query('Project where id is "%s"' % project_id).first()
+    seqs = s.query('Sequence where project.id is "%s"' % project_id).all()
+    assets = s.query('select name, thumbnail_id from AssetBuild where project.id is "%s"' % project_id).all()
+    shots = s.query('select name, thumbnail_id from Shot where project.id is "%s"' % project_id).all()
+    tasks = s.query('select type.name, status.name, parent.name, parent.object_type.name '
+                    'from Task where project.id is "%s"' % project_id).all()
+
+    def canon(v):
+        return _CANON.get((v or "").lower(), (v or "").lower())
+    sm = {sh["name"]: {"cast": [], "thumbnail": bool(sh["thumbnail_id"]), "tasks": {}} for sh in shots}
+    for t in tasks:
+        par = t["parent"]
+        if par and _path(par, "object_type.name") == "Shot" and par["name"] in sm:
+            sm[par["name"]]["tasks"][_path(t, "type.name")] = canon(_path(t, "status.name"))
+    return {"tracker": "ftrack", "project": {"name": proj["name"] if proj else None, "id": project_id},
+            "counts": {"sequences": len(seqs), "assets": len(assets), "shots": len(shots), "tasks": len(tasks)},
+            "shots": sm, "assets": {a["name"]: {"thumbnail": bool(a["thumbnail_id"])} for a in assets}}
+
+
 # ---- register every function above as an MCP tool -----------------------------------------
 for _fn in (query, query_one, create, update, delete,
             list_entity_types, get_entity_schema, list_project_schemas, list_statuses,
             list_task_types, list_object_types, list_priorities, list_custom_attributes,
             list_projects, get_project, create_project, list_children, list_tasks, create_task,
             set_status, assign_task, add_note, get_notes, list_lists, log_time, set_thumbnail,
-            create_version, upload_review_media, whoami, list_users):
+            create_version, upload_review_media, project_summary, whoami, list_users):
     mcp.tool(_fn)
 
 

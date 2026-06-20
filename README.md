@@ -14,7 +14,7 @@ two layers:
 - **Typed convenience tools** — projects, structure, tasks, statuses, assignments, notes, lists, time logs,
   thumbnails, users, and full **schema introspection** — make the common production ops one call each.
 
-**30 tools** in total (see below).
+**31 tools** in total (see below).
 
 ## Install
 ```bash
@@ -60,6 +60,7 @@ env to the app's `mcpServers` config.
 `create_task`
 **Ops:** `set_status` · `assign_task` · `add_note` · `get_notes` · `list_lists` · `log_time`
 **Media / versions:** `set_thumbnail` · `create_version` · `upload_review_media` (encodes a movie into a web-reviewable AssetVersion)
+**Cross-tracker:** `project_summary` (normalized project snapshot — counts + per-shot status/thumbnail, canonical statuses — for verify/diff)
 **Users / meta:** `whoami` · `list_users`
 
 ### Examples (what an agent would call)
@@ -87,7 +88,7 @@ shot↔asset casting** (so casting can't round-trip through ftrack) and its VFX 
 - Reads return entities serialized to the **fields you request** (dot-paths like `status.name`), to avoid
   lazy-loading huge relations. Writes auto-resolve `{"id": "..."}` references (parent → `Context`,
   project → `Project`, status → `Status`, type → `Type`, …).
-- Validated live: all 30 tools register (incl. video version media: encode_media -> ftrackreview-mp4); query/schema/create/update/delete/notes/status round-trips pass.
+- Validated live: all 31 tools register (incl. video version media: encode_media -> ftrackreview-mp4); query/schema/create/update/delete/notes/status round-trips pass.
 - Writes are gated by **`dry_run`** (preview, nothing staged). This replaced an earlier `commit` flag, where
   `commit=false` was a footgun — ftrack would stage the change and a later commit would flush it.
 - A TS port over the official `ftrack-javascript` SDK is straightforward if you want it in-stack.
