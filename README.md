@@ -86,6 +86,9 @@ vocabularies) and the **migration incompatibilities** to know about — notably 
 shot↔asset casting** (so casting can't round-trip through ftrack) and its VFX schema lacks a clean
 "done"/"approved" task status (lossy status mapping).
 
+🧪 **See [`TESTING.md`](TESTING.md)** for how these servers are validated — live round-trip tests, two-level
+dry-run checks, and the cross-tracker migration matrix (including what is *not* yet covered, stated plainly).
+
 ## Notes
 - Reads return entities serialized to the **fields you request** (dot-paths like `status.name`), to avoid
   lazy-loading huge relations. Writes auto-resolve `{"id": "..."}` references (parent → `Context`,
