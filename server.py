@@ -245,8 +245,11 @@ def get_project(name_or_id: str) -> dict | None:
     return ser(r, ["name", "full_name", "status", "project_schema.name"]) if r else None
 
 
-def create_project(name: str, full_name: str, schema: str = "VFX") -> dict:
-    """Create a project. `schema` is a project-schema name (see list_project_schemas)."""
+def create_project(name: str, full_name: str, schema: str = "VFX", dry_run: bool = False) -> dict:
+    """Create a project. `schema` is a project-schema name (see list_project_schemas).
+    `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "create project", "name": name, "full_name": full_name, "schema": schema}
     ps = session().query('ProjectSchema where name is "%s"' % schema).one()
     p = session().create("Project", {"name": name, "full_name": full_name, "project_schema": ps})
     session().commit()
@@ -270,8 +273,13 @@ def list_tasks(project_id: str = None, entity_id: str = None, limit: int = 200) 
     return ser_list(session().query(q), ["name", "type.name", "status.name", "bid", "parent.name"], limit)
 
 
-def create_task(parent_id: str, task_type: str, name: str = None, status: str = None) -> dict:
-    """Create a task under a parent (shot/asset). task_type & status are names."""
+def create_task(parent_id: str, task_type: str, name: str = None, status: str = None,
+                dry_run: bool = False) -> dict:
+    """Create a task under a parent (shot/asset). task_type & status are names.
+    `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "create task", "parent_id": parent_id,
+                "task_type": task_type, "name": name, "status": status}
     parent = session().get("TypedContext", parent_id)
     data = {"name": name or task_type, "parent": parent,
             "type": session().query('Type where name is "%s"' % task_type).one()}
@@ -287,24 +295,33 @@ def create_task(parent_id: str, task_type: str, name: str = None, status: str = 
 # =====================================================================================
 #  status / assignment / notes / lists / time / media / users
 # =====================================================================================
-def set_status(entity_type: str, entity_id: str, status: str) -> dict:
-    """Set an entity's status by status name."""
+def set_status(entity_type: str, entity_id: str, status: str, dry_run: bool = False) -> dict:
+    """Set an entity's status by status name. `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "set status", "entity_type": entity_type,
+                "entity_id": entity_id, "status": status}
     e = session().get(entity_type, entity_id)
     e["status"] = session().query('Status where name is "%s"' % status).one()
     session().commit()
     return ser(e, ["name", "status.name", "id"])
 
 
-def assign_task(task_id: str, user_id: str) -> dict:
-    """Assign a user to a task (creates an Appointment)."""
+def assign_task(task_id: str, user_id: str, dry_run: bool = False) -> dict:
+    """Assign a user to a task (creates an Appointment). `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "assign task", "task_id": task_id, "user_id": user_id}
     session().create("Appointment", {"context": session().get("Task", task_id),
                                       "resource": session().get("User", user_id), "type": "assignment"})
     session().commit()
     return {"ok": True, "task_id": task_id, "user_id": user_id}
 
 
-def add_note(entity_type: str, entity_id: str, text: str, author_id: str = None) -> dict:
-    """Add a note to any entity. author_id defaults to the API user."""
+def add_note(entity_type: str, entity_id: str, text: str, author_id: str = None,
+             dry_run: bool = False) -> dict:
+    """Add a note to any entity. author_id defaults to the API user. `dry_run=true` previews."""
+    if dry_run:
+        return {"dry_run": True, "would": "add note", "entity_type": entity_type,
+                "entity_id": entity_id, "text": text}
     e = session().get(entity_type, entity_id)
     author = session().get("User", author_id) if author_id else \
         session().query('User where username is "%s"' % _env("FTRACK_API_USER")).first()
@@ -325,8 +342,11 @@ def list_lists(project_id: str) -> list[dict]:
     return ser_list(session().query('List where project.id is "%s"' % project_id), ["name", "category.name"])
 
 
-def log_time(task_id: str, duration_seconds: int, user_id: str = None, start: str = None) -> dict:
-    """Log time on a task (TimeLog). duration in seconds."""
+def log_time(task_id: str, duration_seconds: int, user_id: str = None, start: str = None,
+             dry_run: bool = False) -> dict:
+    """Log time on a task (TimeLog). duration in seconds. `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "log time", "task_id": task_id, "duration_seconds": duration_seconds}
     user = session().get("User", user_id) if user_id else \
         session().query('User where username is "%s"' % _env("FTRACK_API_USER")).first()
     data = {"context_id": task_id, "user_id": user["id"], "duration": duration_seconds}
@@ -337,8 +357,11 @@ def log_time(task_id: str, duration_seconds: int, user_id: str = None, start: st
     return ser(tl, ["duration", "id"])
 
 
-def set_thumbnail(entity_type: str, entity_id: str, image_url_or_path: str) -> dict:
-    """Set an entity's thumbnail from a local path or a URL."""
+def set_thumbnail(entity_type: str, entity_id: str, image_url_or_path: str, dry_run: bool = False) -> dict:
+    """Set an entity's thumbnail from a local path or a URL. `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "set thumbnail", "entity_type": entity_type,
+                "entity_id": entity_id, "source": image_url_or_path}
     e = session().get(entity_type, entity_id)
     path = image_url_or_path
     if image_url_or_path.startswith("http"):
@@ -350,10 +373,15 @@ def set_thumbnail(entity_type: str, entity_id: str, image_url_or_path: str) -> d
     return {"ok": True, "entity_id": entity_id}
 
 
-def create_version(parent_id: str, name: str = None, task_id: str = None, asset_type: str = None) -> dict:
+def create_version(parent_id: str, name: str = None, task_id: str = None, asset_type: str = None,
+                   dry_run: bool = False) -> dict:
     """Create an AssetVersion under a context (shot/asset) — ftrack's review unit. ftrack AssetVersions live
     under an Asset, so the parent Asset is created if missing. `asset_type` is an AssetType name (default:
-    first available); link a task with `task_id`. Pair with `upload_review_media` to attach a movie."""
+    first available); link a task with `task_id`. Pair with `upload_review_media` to attach a movie.
+    `dry_run=true` previews without committing."""
+    if dry_run:
+        return {"dry_run": True, "would": "create version", "parent_id": parent_id,
+                "name": name, "task_id": task_id, "asset_type": asset_type}
     s = session()
     parent = s.query('Context where id is "%s"' % parent_id).first()
     at = (s.query('AssetType where name is "%s"' % asset_type).first() if asset_type
@@ -370,9 +398,12 @@ def create_version(parent_id: str, name: str = None, task_id: str = None, asset_
     return ser(ver, ["version", "id"])
 
 
-def upload_review_media(version_id: str, path: str) -> dict:
+def upload_review_media(version_id: str, path: str, dry_run: bool = False) -> dict:
     """Upload a movie/image to an AssetVersion as **web-reviewable** media — ftrack encodes it
-    (produces the ftrackreview component). Use this to carry version media INTO ftrack during a migration."""
+    (produces the ftrackreview component). Use this to carry version media INTO ftrack during a migration.
+    `dry_run=true` previews without uploading."""
+    if dry_run:
+        return {"dry_run": True, "would": "upload review media", "version_id": version_id, "path": path}
     ver = session().get("AssetVersion", version_id)
     ver.encode_media(path)
     session().commit()
