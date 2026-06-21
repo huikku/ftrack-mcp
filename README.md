@@ -71,12 +71,12 @@ env to the app's `mcpServers` config.
 - *"what fields does a Shot have?"* → `get_entity_schema("Shot")`
 - *"make a task"* → `create_task("<shot_id>", "Compositing", status="Ready to start")`
 
-## Part of a tracker-MCP quartet — migrate projects between platforms
-This is one of **four sibling tracker MCPs**, each with the same shape (generic CRUD + schema + typed
+## Part of a tracker-MCP quintet — migrate projects between platforms
+This is one of **five sibling tracker MCPs**, each with the same shape (generic CRUD + schema + typed
 convenience): [`shotgrid-mcp`](https://github.com/huikku/shotgrid-mcp),
 [`ftrack-mcp`](https://github.com/huikku/ftrack-mcp) (this repo),
 [`kitsu-mcp`](https://github.com/huikku/kitsu-mcp), and
-[`ayon-mcp`](https://github.com/huikku/ayon-mcp). They all speak the same production model
+[`ayon-mcp`](https://github.com/huikku/ayon-mcp), and [`nim-mcp`](https://github.com/huikku/nim-mcp). They all speak the same production model
 (Project → Sequence/Asset → Shot → Task → Version/Status), so **an agent with two of them loaded can migrate
 a project from one tracker to another** — read the structure from the source MCP, recreate it via the
 target's `create`/`create_*` tools, no bespoke script. This trio grew out of copying one project across all
