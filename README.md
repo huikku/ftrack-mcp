@@ -71,17 +71,18 @@ env to the app's `mcpServers` config.
 - *"what fields does a Shot have?"* → `get_entity_schema("Shot")`
 - *"make a task"* → `create_task("<shot_id>", "Compositing", status="Ready to start")`
 
-## Part of a tracker-MCP trio — migrate projects between platforms
-This is one of **three sibling tracker MCPs**, each with the same shape (generic CRUD + schema + typed
+## Part of a tracker-MCP quartet — migrate projects between platforms
+This is one of **four sibling tracker MCPs**, each with the same shape (generic CRUD + schema + typed
 convenience): [`shotgrid-mcp`](https://github.com/huikku/shotgrid-mcp),
-[`ftrack-mcp`](https://github.com/huikku/ftrack-mcp) (this repo), and
-[`kitsu-mcp`](https://github.com/huikku/kitsu-mcp). They all speak the same production model
+[`ftrack-mcp`](https://github.com/huikku/ftrack-mcp) (this repo),
+[`kitsu-mcp`](https://github.com/huikku/kitsu-mcp), and
+[`ayon-mcp`](https://github.com/huikku/ayon-mcp). They all speak the same production model
 (Project → Sequence/Asset → Shot → Task → Version/Status), so **an agent with two of them loaded can migrate
 a project from one tracker to another** — read the structure from the source MCP, recreate it via the
 target's `create`/`create_*` tools, no bespoke script. This trio grew out of copying one project across all
 three platforms.
 
-📊 **See [`COMPARISON.md`](COMPARISON.md)** for a side-by-side of the three trackers (data model, status
+📊 **See [`COMPARISON.md`](COMPARISON.md)** for a side-by-side of the four trackers (data model, status
 vocabularies) and the **migration incompatibilities** to know about — notably that **ftrack has no
 shot↔asset casting** (so casting can't round-trip through ftrack) and its VFX schema lacks a clean
 "done"/"approved" task status (lossy status mapping).
